@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build / caches
+dist/
+build/
+.vite/
+*.tsbuildinfo
+.cache/
+.turbo/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Backend local DB / binaries
+backend/*.db
+backend/*.db-journal
+backend/guzopay
+*.exe
+
+# Logs & OS
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# Coverage / test
+coverage/
+*.out
+
+# PWA generated
+dev-dist/
+sw.js
+workbox-*.js

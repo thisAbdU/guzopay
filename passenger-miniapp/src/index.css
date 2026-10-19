@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  color: #102a23;
+  background:
+    radial-gradient(120% 80% at 50% -10%, #c8f0d8 0%, transparent 55%),
+    linear-gradient(180deg, #e8f8ef 0%, #f4fbf7 40%, #ffffff 100%);
+  font-family: "DM Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes check-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.12); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-check {
+  animation: check-pop 0.45s ease-out forwards;
+}

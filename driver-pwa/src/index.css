@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  color: #0a1f18;
+  background:
+    linear-gradient(135deg, rgba(15, 122, 74, 0.08), transparent 40%),
+    linear-gradient(180deg, #eef5f1 0%, #f7fbf8 45%, #ffffff 100%);
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes flash-row {
+  0% { background-color: rgba(29, 185, 84, 0.35); }
+  100% { background-color: transparent; }
+}
+
+.flash-new {
+  animation: flash-row 1.4s ease-out;
+}
