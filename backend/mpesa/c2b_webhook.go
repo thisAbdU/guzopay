@@ -18,12 +18,10 @@ import (
 type BroadcastFn func(vehicleCode string, payload any)
 
 // C2BCallback handles Safaricom Daraja C2B confirmation callbacks.
-// Stub-ready for github.com/Safaricom-Ethiopia-PLC/mpesa-go-sdk integration.
 type C2BCallback struct {
 	Broadcast BroadcastFn
 }
 
-// Daraja-style confirmation payload (subset used by the MVP).
 type c2bPayload struct {
 	TransactionType   string  `json:"TransactionType"`
 	TransID           string  `json:"TransID"`
@@ -61,27 +59,58 @@ func (h *C2BCallback) Handle(c *gin.Context) {
 	if name == "" {
 		name = "M-Pesa Customer"
 	}
-	phone := normalizePhone(body.MSISDN)
-
-	payment := models.Payment{
-		ID:             uuid.New().String(),
-		VehicleCode:    driver.VehicleCode,
-		PassengerName:  name,
-		PassengerPhone: phone,
-		Amount:         body.TransAmount,
-		Status:         "COMPLETED",
-		MpesaTxID:      body.TransID,
-		CreatedAt:      time.Now().UTC(),
-	}
-	if payment.MpesaTxID == "" {
-		payment.MpesaTxID = fmt.Sprintf("MP%s", strings.ToUpper(uuid.New().String()[:12]))
+	phone := FromMSISDN251(body.MSISDN)
+	if !strings.HasPrefix(phone, "07") {
+		phone = normalizePhone(body.MSISDN)
 	}
 
-	if err := database.DB.Create(&payment).Error; err != nil {
-		log.Printf("c2b create payment: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"ResultCode": 1, "ResultDesc": "Failed"})
+	txID := body.TransID
+	if txID == "" {
+		txID = fmt.Sprintf("MP%s", strings.ToUpper(uuid.New().String()[:12]))
+	}
+
+	// Idempotent: ignore duplicate confirmation for same TransID.
+	var existing models.Payment
+	if err := database.DB.Where("mpesa_tx_id = ?", txID).First(&existing).Error; err == nil {
+		c.JSON(http.StatusOK, gin.H{"ResultCode": 0, "ResultDesc": "Accepted"})
 		return
 	}
+
+	// Prefer completing an existing PENDING payment for this taxi + amount.
+	var payment models.Payment
+	err := database.DB.
+		Where("UPPER(vehicle_code) = ? AND status = ? AND amount = ?", code, "PENDING", body.TransAmount).
+		Order("created_at desc").
+		First(&payment).Error
+
+	if err == nil {
+		payment.Status = "COMPLETED"
+		payment.MpesaTxID = txID
+		payment.PassengerName = name
+		payment.PassengerPhone = phone
+		if err := database.DB.Save(&payment).Error; err != nil {
+			log.Printf("c2b update payment: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"ResultCode": 1, "ResultDesc": "Failed"})
+			return
+		}
+	} else {
+		payment = models.Payment{
+			ID:             uuid.New().String(),
+			VehicleCode:    driver.VehicleCode,
+			PassengerName:  name,
+			PassengerPhone: phone,
+			Amount:         body.TransAmount,
+			Status:         "COMPLETED",
+			MpesaTxID:      txID,
+			CreatedAt:      time.Now().UTC(),
+		}
+		if err := database.DB.Create(&payment).Error; err != nil {
+			log.Printf("c2b create payment: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"ResultCode": 1, "ResultDesc": "Failed"})
+			return
+		}
+	}
+
 	driver.WalletBalance += body.TransAmount
 	_ = database.DB.Save(&driver)
 
@@ -97,12 +126,5 @@ func (h *C2BCallback) Handle(c *gin.Context) {
 }
 
 func normalizePhone(msisdn string) string {
-	msisdn = strings.TrimSpace(msisdn)
-	if strings.HasPrefix(msisdn, "2517") && len(msisdn) == 12 {
-		return "0" + msisdn[3:]
-	}
-	if strings.HasPrefix(msisdn, "07") {
-		return msisdn
-	}
-	return msisdn
+	return FromMSISDN251(msisdn)
 }

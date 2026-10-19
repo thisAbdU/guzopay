@@ -30,9 +30,29 @@ type Payment struct {
 	PassengerPhone string    `json:"passenger_phone"` // Safaricom ET: starts with 07
 	Amount         float64   `json:"amount"`
 	FareTierName   string    `json:"fare_tier_name"`
-	Status         string    `json:"status"` // COMPLETED | PENDING
+	Status         string    `json:"status"` // COMPLETED | PENDING | FAILED
 	MpesaTxID      string    `json:"mpesa_tx_id"`
 	CreatedAt      time.Time `json:"created_at"`
+}
+
+// Payout is GuzoPay merchant → driver M-Pesa (B2C).
+type Payout struct {
+	ID                       string    `json:"id" gorm:"type:uuid;primaryKey"`
+	VehicleCode              string    `json:"vehicle_code" gorm:"index"`
+	DriverPhone              string    `json:"driver_phone"`
+	Amount                   float64   `json:"amount"`
+	Status                   string    `json:"status"` // PENDING | COMPLETED | FAILED
+	OriginatorConversationID string    `json:"originator_conversation_id" gorm:"index"`
+	MpesaTxID                string    `json:"mpesa_tx_id"`
+	FailureReason            string    `json:"failure_reason"`
+	CreatedAt                time.Time `json:"created_at"`
+}
+
+func (p *Payout) BeforeCreate(tx *gorm.DB) error {
+	if p.ID == "" {
+		p.ID = uuid.New().String()
+	}
+	return nil
 }
 
 func (p *Payment) BeforeCreate(tx *gorm.DB) error {

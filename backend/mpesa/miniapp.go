@@ -1,7 +1,6 @@
 package mpesa
 
 import (
-	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -161,16 +160,13 @@ func InitiateMiniPay(c *gin.Context) {
 		return
 	}
 
-	name := req.PassengerName
+	phone := strings.TrimSpace(req.PassengerPhone)
+	name := strings.TrimSpace(req.PassengerName)
 	if name == "" {
-		name = "M-Pesa User"
-	}
-	phone := req.PassengerPhone
-	if phone == "" {
-		phone = "0712345678"
+		name = "M-Pesa Customer"
 	}
 
-	tradeNO := fmt.Sprintf("%d%s", time.Now().Unix(), strings.ToUpper(uuid.New().String()[:8]))
+	// PENDING until payWithMpesa success or C2B confirmation webhook.
 	payment := models.Payment{
 		ID:             uuid.New().String(),
 		VehicleCode:    driver.VehicleCode,
@@ -179,7 +175,7 @@ func InitiateMiniPay(c *gin.Context) {
 		Amount:         req.Amount,
 		FareTierName:   tierName,
 		Status:         "PENDING",
-		MpesaTxID:      tradeNO,
+		MpesaTxID:      "",
 		CreatedAt:      time.Now().UTC(),
 	}
 	if err := database.DB.Create(&payment).Error; err != nil {
@@ -187,13 +183,14 @@ func InitiateMiniPay(c *gin.Context) {
 		return
 	}
 
-	// Real path: call Safaricom /v2/payments/pay and return acquirementId / orderStr.
+	businessID := os.Getenv("MPESA_SHORTCODE")
 	c.JSON(http.StatusOK, gin.H{
-		"payment_id":   payment.ID,
-		"tradeNO":      tradeNO,
-		"amount":       payment.Amount,
-		"vehicle_code": driver.VehicleCode,
-		"driver_name":  driver.Name,
-		"mock":         os.Getenv("MPESA_AUTH_CLIENT_ID") == "",
+		"payment_id":     payment.ID,
+		"bill_reference": driver.VehicleCode, // pass to payWithMpesa billReference
+		"business_id":    businessID,
+		"amount":         payment.Amount,
+		"vehicle_code":   driver.VehicleCode,
+		"driver_name":    driver.Name,
+		"status":         "PENDING",
 	})
 }

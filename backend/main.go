@@ -10,12 +10,18 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	_ = godotenv.Load()
+	_ = godotenv.Load(".env")
+	_ = godotenv.Load("backend/.env")
+
 	if err := database.Connect(); err != nil {
 		log.Fatal(err)
 	}
+	mpesa.InitFromEnv()
 
 	hub := handlers.NewHub()
 	pay := &handlers.PaymentHandler{Hub: hub}
@@ -36,14 +42,24 @@ func main() {
 		api.GET("/taxi/nearby", pay.NearbyTaxis)
 		api.GET("/taxi/:code", pay.GetTaxi)
 		api.POST("/pay", pay.Pay)
-		api.POST("/pay/initiate", mpesa.InitiateMiniPay)
+		api.GET("/pay/:id", pay.GetPayment)
+		api.POST("/pay/initiate", mpesa.InitiateMiniPay) // Mini App tradePay stub
+		api.POST("/pay/daraja", mpesa.InitiateDarajaPay(hub.Broadcast))
 		api.POST("/pay/confirm", pay.ConfirmPay)
+
+		api.POST("/mpesa/c2b-validation", mpesa.C2BValidation)
 		api.POST("/mpesa/c2b-callback", c2b.Handle)
+		api.POST("/mpesa/b2c-result", mpesa.B2CResultCallback(hub.Broadcast))
+		api.POST("/mpesa/b2c-timeout", mpesa.B2CTimeoutCallback)
+		api.POST("/mpesa/register-urls", mpesa.RegisterURLsHandler)
 		api.POST("/mpesa/auth", mpesa.MiniAppAuth)
 		api.POST("/mpesa/notify-payment", mpesa.NotifyPayment(hub.Broadcast))
+
+		api.GET("/drivers", drv.List)
 		api.GET("/driver/:code/dashboard", drv.Dashboard)
 		api.POST("/driver/:code/proximity", drv.SetProximity)
 		api.PUT("/driver/:code/fare-tiers", drv.SetFareTiers)
+		api.POST("/driver/:code/payout", drv.Payout)
 	}
 	r.GET("/ws/driver/:code", ws.DriverSocket)
 

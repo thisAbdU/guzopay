@@ -16,6 +16,20 @@ import (
 
 var safaricomPhone = regexp.MustCompile(`^07\d{8}$`)
 
+// normalizePassengerPhone accepts "", 07…, or 2517… (from userScopes / Daraja).
+func normalizePassengerPhone(raw string) string {
+	phone := strings.TrimSpace(raw)
+	phone = strings.ReplaceAll(phone, "+", "")
+	phone = strings.ReplaceAll(phone, " ", "")
+	if strings.HasPrefix(phone, "2517") && len(phone) == 12 {
+		phone = "0" + phone[3:]
+	}
+	if phone == "" || safaricomPhone.MatchString(phone) {
+		return phone
+	}
+	return phone // keep as-is; C2B webhook will overwrite
+}
+
 type PaymentHandler struct {
 	Hub *Hub
 }
@@ -75,17 +89,11 @@ func (h *PaymentHandler) Pay(c *gin.Context) {
 		return
 	}
 	code := strings.ToUpper(strings.TrimSpace(req.VehicleCode))
-	name := req.PassengerName
+	phone := normalizePassengerPhone(req.PassengerPhone)
+	name := strings.TrimSpace(req.PassengerName)
+	// Name/phone come from M-Pesa userScopes / C2B — never required from the UI.
 	if name == "" {
-		name = "Abebe Kebede"
-	}
-	phone := req.PassengerPhone
-	if phone == "" {
-		phone = "0712345678"
-	}
-	if !safaricomPhone.MatchString(phone) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "passenger_phone must be Safaricom format 07XXXXXXXX"})
-		return
+		name = "M-Pesa Customer"
 	}
 
 	var driver models.Driver
@@ -145,11 +153,29 @@ func (h *PaymentHandler) Pay(c *gin.Context) {
 	})
 }
 
-// ConfirmPay finalizes a PENDING mini-app payment after my.tradePay resultCode 9000.
+// GetPayment returns payment status (poll after Daraja simulate).
+func (h *PaymentHandler) GetPayment(c *gin.Context) {
+	id := c.Param("id")
+	var payment models.Payment
+	if err := database.DB.Where("id = ?", id).First(&payment).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "payment not found"})
+		return
+	}
+	var driver models.Driver
+	_ = database.DB.Where("vehicle_code = ?", payment.VehicleCode).First(&driver)
+	c.JSON(http.StatusOK, gin.H{
+		"payment":      payment,
+		"driver_name":  driver.Name,
+		"vehicle_code": payment.VehicleCode,
+		"mpesa_tx_id":  payment.MpesaTxID,
+	})
+}
+
+// ConfirmPay finalizes a PENDING payment after payWithMpesa (transactionId) or tradePay.
 func (h *PaymentHandler) ConfirmPay(c *gin.Context) {
 	var req struct {
 		PaymentID  string `json:"payment_id"`
-		TradeNO    string `json:"tradeNO"`
+		TradeNO    string `json:"tradeNO"` // M-Pesa transactionId from payWithMpesa
 		ResultCode string `json:"result_code"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -196,6 +222,9 @@ func (h *PaymentHandler) ConfirmPay(c *gin.Context) {
 		return
 	}
 
+	if req.TradeNO != "" {
+		payment.MpesaTxID = req.TradeNO
+	}
 	payment.Status = "COMPLETED"
 	if err := database.DB.Save(&payment).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to confirm"})

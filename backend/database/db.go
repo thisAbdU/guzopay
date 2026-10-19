@@ -37,35 +37,10 @@ func Connect() error {
 		return fmt.Errorf("connect db: %w", err)
 	}
 
-	if err := db.AutoMigrate(&models.Driver{}, &models.Payment{}); err != nil {
+	if err := db.AutoMigrate(&models.Driver{}, &models.Payment{}, &models.Payout{}); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
 
 	DB = db
-	return Seed()
-}
-
-func Seed() error {
-	var driver models.Driver
-	err := DB.Where("vehicle_code = ?", "4A2Q").First(&driver).Error
-	if err == gorm.ErrRecordNotFound {
-		return DB.Create(&models.Driver{
-			ID:               "drv-4A2Q",
-			Name:             "Dawit Alemu",
-			VehicleCode:      "4A2Q",
-			Phone:            "0911223344",
-			Route:            "Megenagna → Bole",
-			WalletBalance:    0,
-			ProximityEnabled: false,
-			FareTiers:        models.DefaultFareTiers(),
-		}).Error
-	}
-	if err != nil {
-		return err
-	}
-	if len(driver.FareTiers) == 0 {
-		driver.FareTiers = models.DefaultFareTiers()
-		return DB.Save(&driver).Error
-	}
-	return nil
+	return SeedDrivers()
 }

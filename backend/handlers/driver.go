@@ -13,6 +13,26 @@ import (
 
 type DriverHandler struct{}
 
+// List returns all drivers (for PWA login / vehicle picker).
+func (h *DriverHandler) List(c *gin.Context) {
+	var drivers []models.Driver
+	if err := database.DB.Order("vehicle_code asc").Find(&drivers).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list drivers"})
+		return
+	}
+	out := make([]gin.H, 0, len(drivers))
+	for _, d := range drivers {
+		out = append(out, gin.H{
+			"id":           d.ID,
+			"name":         d.Name,
+			"vehicle_code": d.VehicleCode,
+			"phone":        d.Phone,
+			"route":        d.Route,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"drivers": out})
+}
+
 func (h *DriverHandler) Dashboard(c *gin.Context) {
 	code := strings.ToUpper(strings.TrimSpace(c.Param("code")))
 	var driver models.Driver

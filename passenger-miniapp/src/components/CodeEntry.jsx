@@ -41,7 +41,7 @@ export default function CodeEntry({ code, onCodeChange, taxi, onTaxi, error, onE
       <input
         value={code}
         onChange={(e) => onCodeChange(e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase())}
-        placeholder="4A2Q"
+        placeholder="Code"
         maxLength={4}
         inputMode="text"
         autoComplete="off"
