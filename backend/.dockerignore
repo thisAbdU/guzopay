@@ -1,0 +1,7 @@
+.git
+.gitignore
+**/*.db
+**/*.db-journal
+*.md
+.env
+.env.*
